@@ -271,6 +271,7 @@ try:
             return result_p, result_q
     
 except Exception as e:
+    CuroboPlanner = None
     print('[planner.py]: Something wrong happened when importing CuroboPlanner! Please check if Curobo is installed correctly. If the problem still exists, you can install Curobo from https://github.com/NVlabs/curobo manually.')
     print('Exception traceback:')
     traceback.print_exc()
@@ -432,3 +433,24 @@ class MplibPlanner:
         res["per_step"] = per_step  # dis per step
         res["result"] = vals
         return res
+
+
+class MplibWrapperPlanner(MplibPlanner):
+    """Expose the planner interface used by native tasks with mplib only.
+
+    SapienPlanner clips joint limits before padding, so it needs the full state.
+    """
+
+    def plan_path(self, curr_joint_pos, target_gripper_pose, constraint_pose=None, arms_tag=None):
+        joint_angles = np.round(np.asarray(curr_joint_pos), 5)
+        pose = mplib.pymp.Pose(target_gripper_pose.p, target_gripper_pose.q)
+        return super().plan_path(joint_angles, pose, arms_tag=arms_tag, log=False)
+
+    def plan_batch(self, curr_joint_pos, target_gripper_pose_list, constraint_pose=None, arms_tag=None):
+        results = [self.plan_path(curr_joint_pos, pose, constraint_pose, arms_tag)
+                   for pose in target_gripper_pose_list]
+        return {
+            "status": np.array([r["status"] for r in results], dtype=object),
+            "position": np.array([r.get("position", []) for r in results], dtype=object),
+            "velocity": np.array([r.get("velocity", []) for r in results], dtype=object),
+        }

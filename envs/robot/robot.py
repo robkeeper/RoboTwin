@@ -1,7 +1,7 @@
 import sapien.core as sapien
 import numpy as np
 import pdb
-from .planner import MplibPlanner
+from .planner import MplibPlanner, MplibWrapperPlanner
 import numpy as np
 import toppra as ta
 import math
@@ -27,6 +27,9 @@ class Robot:
         # self.dual_arm = dual_arm_tag
         # self.plan_success = True
 
+        self.planner_backend = kwargs.get("planner_backend", "curobo")
+        if self.planner_backend not in ("curobo", "mplib"):
+            raise ValueError(f"Unsupported planner backend: {self.planner_backend}")
         self.left_js = None
         self.right_js = None
 
@@ -255,6 +258,23 @@ class Robot:
         print("right ee: ", self.right_ee.get_name())
 
     def set_planner(self, scene=None):
+        if self.planner_backend == "mplib":
+            self.communication_flag = False
+            for side in ("left", "right"):
+                entity = getattr(self, f"{side}_entity")
+                planner = MplibWrapperPlanner(
+                    getattr(self, f"{side}_urdf_path"),
+                    getattr(self, f"{side}_srdf_path"),
+                    getattr(self, f"{side}_move_group"),
+                    getattr(self, f"{side}_entity_origion_pose"),
+                    entity,
+                    "mplib_RRT",
+                    scene,
+                )
+                setattr(self, f"{side}_planner", planner)
+                setattr(self, f"{side}_mplib_planner", planner)
+            return
+
         abs_left_curobo_yml_path = os.path.join(CONFIGS.ROOT_PATH, self.left_curobo_yml_path)
         abs_right_curobo_yml_path = os.path.join(CONFIGS.ROOT_PATH, self.right_curobo_yml_path)
 

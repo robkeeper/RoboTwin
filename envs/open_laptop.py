@@ -61,6 +61,13 @@ class open_laptop(Base_Task):
         }
         return self.info
 
+    def get_info(self):
+        """Return instruction parameters without executing the expert policy."""
+        return {
+            "{A}": f"{self.model_name}/base{self.model_id}",
+            "{a}": str(self.arm_tag),
+        }
+
     def check_success(self, target=0.4):
         limit = self.laptop.get_qlimits()[0]
         qpos = self.laptop.get_qpos()

@@ -219,7 +219,15 @@ class Base_Task(gym.Env):
 
         # declare sapien scene
         scene_config = sapien.SceneConfig()
-        self.scene = self.engine.create_scene(scene_config)
+        render_device = os.environ.get("ROBOTWIN_RENDER_DEVICE")
+        if render_device:
+            sapien.physx.set_scene_config(scene_config)
+            self.scene = sapien.Scene([
+                sapien.physx.PhysxCpuSystem(),
+                sapien.render.RenderSystem(render_device),
+            ])
+        else:
+            self.scene = self.engine.create_scene(scene_config)
         # set simulation timestep
         self.scene.set_timestep(kwargs.get("timestep", 1 / 250))
         # add ground to scene
@@ -276,7 +284,7 @@ class Base_Task(gym.Env):
 
         if self.random_background:
             texture_type = "seen" if not self.eval_mode else "unseen"
-            directory_path = f"./assets/background_texture/{texture_type}"
+            directory_path = os.path.join(ASSETS_PATH, "background_texture", texture_type)
             file_count = len(
                 [name for name in os.listdir(directory_path) if os.path.isfile(os.path.join(directory_path, name))])
 

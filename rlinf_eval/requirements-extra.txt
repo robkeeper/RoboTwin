@@ -1,0 +1,3 @@
+# Missing from the base image; installed during the 9981 smoke test.
+h5py==3.14.0
+tzdata==2026.6
