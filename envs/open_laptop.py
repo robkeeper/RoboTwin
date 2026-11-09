@@ -29,10 +29,11 @@ class open_laptop(Base_Task):
         self.laptop.set_properties(1, 0)
         self.add_prohibit_area(self.laptop, padding=0.1)
 
-    def play_once(self):
         face_prod = get_face_prod(self.laptop.get_pose().q, [1, 0, 0], [1, 0, 0])
-        arm_tag = ArmTag("left" if face_prod > 0 else "right")
-        self.arm_tag = arm_tag
+        self.arm_tag = ArmTag("left" if face_prod > 0 else "right")
+
+    def play_once(self):
+        arm_tag = self.arm_tag
 
         # Grasp the laptop
         self.move(self.grasp_actor(self.laptop, arm_tag=arm_tag, pre_grasp_dis=0.08, contact_point_id=0))
@@ -59,9 +60,6 @@ class open_laptop(Base_Task):
         return self.info
 
     def get_info(self):
-        face_prod = get_face_prod(self.laptop.get_pose().q, [1, 0, 0], [1, 0, 0])
-        arm_tag = ArmTag("left" if face_prod > 0 else "right")
-        self.arm_tag = arm_tag
         info = {
             "{A}": f"{self.model_name}/base{self.model_id}",
             "{a}": str(self.arm_tag),
