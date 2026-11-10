@@ -5,6 +5,7 @@ import math
 
 
 class open_laptop(Base_Task):
+    instruction_info_from_live_reset = True
 
     def setup_demo(self, is_test=False, **kwags):
         super()._init_task_env_(**kwags)

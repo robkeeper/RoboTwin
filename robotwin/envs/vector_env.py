@@ -90,6 +90,8 @@ class SubEnv:
     def setup_task(self):
         self.close()
         self.task = class_decorator(self.task_name)
+        if getattr(self.task, "instruction_info_from_live_reset", False):
+            return
 
         with self.global_lock:
             with self.lock:
@@ -114,9 +116,9 @@ class SubEnv:
 
                 self.episode_info_list = [episode_info]
 
-    def create_instruction(self):
+    def create_instruction(self, episode_info_list, seed):
         task_descriptions = generate_episode_descriptions(
-            self.task_name, self.episode_info_list, 1, self.env_seed
+            self.task_name, episode_info_list, 1, seed
         )
         instruction = np.random.choice(task_descriptions[0][self.instruction_type])
         return instruction
@@ -168,6 +170,11 @@ class SubEnv:
     def reset(self, env_seed=None):
         with self.global_lock:
             with self.lock:
+                use_live_info = getattr(
+                    self.task, "instruction_info_from_live_reset", False
+                )
+                if use_live_info:
+                    self.instruction = None
                 if self.task is not None:
                     self.reset_count += 1
                     should_clear_cache = self.reset_count % self.clear_cache_freq == 0
@@ -175,33 +182,47 @@ class SubEnv:
                 if env_seed is not None:
                     self.env_seed = env_seed
 
-                self.instruction = self.create_instruction()
-                self.args["instruction"] = self.instruction
+                if use_live_info:
+                    args = self.args.copy()
+                    args.pop("instruction", None)
+                else:
+                    self.instruction = self.create_instruction(
+                        self.episode_info_list, self.env_seed
+                    )
+                    self.args["instruction"] = self.instruction
+                    args = self.args
 
                 trial_seed = self.env_seed
-                is_valid = False
-                while not is_valid:
-                    try:
-                        self.task.setup_demo(
-                            now_ep_num=trial_seed, seed=trial_seed, **self.args
+                try:
+                    while True:
+                        try:
+                            self.task.setup_demo(
+                                now_ep_num=trial_seed, seed=trial_seed, **args
+                            )
+                        except UnStableError as e:
+                            logging.warning(
+                                f"RoboTwin SubEnv {self.env_id} reset error with seed {trial_seed}, error: {e}, trying new seed: {trial_seed + 1}"
+                            )
+                            self.task.close_env(clear_cache=True)
+                            trial_seed += 1
+                        else:
+                            break
+
+                    self.task.step_lim = self.args["step_lim"]
+                    self.task.run_steps = 0
+                    self.task.reward_step = 0
+                    if use_live_info:
+                        instruction = self.create_instruction(
+                            [self.task.get_info()], trial_seed
                         )
-                        self.task.step_lim = self.args["step_lim"]
-                        self.task.run_steps = 0
-                        self.task.reward_step = 0
-                        is_valid = True
-                    except UnStableError as e:
-                        logging.warning(
-                            f"RoboTwin SubEnv {self.env_id} reset error with seed {trial_seed}, error: {e}, trying new seed: {trial_seed + 1}"
-                        )
-                        self.task.close_env(clear_cache=True)
-                        trial_seed += 1
-                        continue
-                    except Exception as e:
-                        logging.error(
-                            f"RoboTwin SubEnv {self.env_id} reset error with seed {trial_seed}, error: {e}"
-                        )
-                        self.task.close_env(clear_cache=True)
-                        raise
+                        self.task.set_instruction(instruction)
+                        self.instruction = instruction
+                except (Exception, SystemExit) as e:
+                    logging.error(
+                        f"RoboTwin SubEnv {self.env_id} reset error with seed {trial_seed}, error: {e}"
+                    )
+                    self.task.close_env(clear_cache=True)
+                    raise
 
         return
 
